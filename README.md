@@ -1,6 +1,6 @@
 # Connect Migration Middleware
 
-[![Build Status](https://travis-ci.com/ingrammicro/connect-migration-middleware.svg?branch=master)](https://travis-ci.com/ingrammicro/connect-migration-middleware) [![codecov](https://codecov.io/gh/ingrammicro/connect-migration-middleware/branch/master/graph/badge.svg)](https://codecov.io/gh/ingrammicro/connect-migration-middleware)
+[![Build Status](https://travis-ci.com/ingrammicro/connect-sdk-migration-framework.svg?branch=master)](https://travis-ci.com/ingrammicro/connect-sdk-migration-framework) [![codecov](https://codecov.io/gh/ingrammicro/connect-sdk-migration-framework/branch/master/graph/badge.svg)](https://codecov.io/gh/ingrammicro/connect-sdk-migration-framework)
 
 Small middleware to ease the service migration from legacy to Connect
 
@@ -11,7 +11,7 @@ Install via ***composer***:
 ```json
 {
     "require": {
-      "ingrammicro/connect-migration-middleware": "*"
+      "apsconnect/connect-sdk-migration-framework": "*"
     }
 }
 ```

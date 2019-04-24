@@ -1,5 +1,5 @@
 {
-  "name": "ingrammicro/connect-migration-middleware",
+  "name": "apsconnect/connect-sdk-migration-framework",
   "description": "Small middleware to ease the service migration from legacy to Connect.",
   "type": "library",
   "license": "Apache-2.0",
