@@ -1,0 +1,15 @@
+<phpunit bootstrap="vendor/autoload.php" verbose="true" stopOnError="true" stopOnFailure="true">
+    <logging>
+        <log type="testdox-text" target="php://stdout" showUncoveredFiles="false"/>
+    </logging>
+    <filter>
+        <whitelist processUncoveredFilesFromWhitelist="true">
+            <directory suffix=".php">./src/</directory>
+        </whitelist>
+    </filter>
+    <testsuites>
+        <testsuite name="Complete">
+            <directory>tests/Unit/</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
