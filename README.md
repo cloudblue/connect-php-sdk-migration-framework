@@ -1,6 +1,6 @@
 # Connect Migration Middleware
 
-[![Build Status](https://travis-ci.com/ingrammicro/connect-sdk-migration-framework.svg?branch=master)](https://travis-ci.com/ingrammicro/connect-sdk-migration-framework) [![codecov](https://codecov.io/gh/ingrammicro/connect-sdk-migration-framework/branch/master/graph/badge.svg)](https://codecov.io/gh/ingrammicro/connect-sdk-migration-framework)
+[![Build Status](https://travis-ci.com/ingrammicro/connect-php-sdk-migration-framework.svg?branch=master)](https://travis-ci.com/ingrammicro/connect-php-sdk-migration-framework) [![Latest Stable Version](https://poser.pugx.org/apsconnect/connect-sdk-migration-framework/v/stable)](https://packagist.org/packages/apsconnect/connect-sdk-migration-framework) [![License](https://poser.pugx.org/apsconnect/connect-sdk-migration-framework/license)](https://packagist.org/packages/apsconnect/connect-sdk-migration-framework) [![codecov](https://codecov.io/gh/ingrammicro/connect-php-sdk-migration-framework/branch/master/graph/badge.svg)](https://codecov.io/gh/ingrammicro/connect-php-sdk-migration-framework)
 
 Small middleware to ease the service migration from legacy to Connect
 
