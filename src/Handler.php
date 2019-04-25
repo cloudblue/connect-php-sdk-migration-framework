@@ -219,13 +219,11 @@ class Handler extends Model
                     if (array_key_exists($param->id, $this->transformations)) {
 
                         $this->logger->info("[MIGRATION::{$request->id}] Running transformation for parameter{$param->id}.");
-                        $new->asset->getParameterByID($param->id)->value(
-                            call_user_func_array($this->transformations[$param->id], [
-                                'data' => $migrationData,
-                                'logger' => $this->logger,
-                                'requestId' => $request->id,
-                            ])
-                        );
+                        $param->value(call_user_func_array($this->transformations[$param->id], [
+                            'data' => $migrationData,
+                            'logger' => $this->logger,
+                            'requestId' => $request->id,
+                        ]));
 
                     } else {
 
@@ -247,10 +245,11 @@ class Handler extends Model
                                 }
                             }
 
-                            $new->asset->getParameterByID($param->id)->value($migrationData->{$param->id});
-                            $report['success'][] = $param->id;
+                            $param->value($migrationData->{$param->id});
                         }
                     }
+
+                    $report['success'][] = $param->id;
 
                 } catch (MigrationParameterFailException $e) {
 
