@@ -164,7 +164,7 @@ class Handler extends Model
      */
     public function isMigration(Request $request)
     {
-        return !empty($request->asset->getParameterByID($this->migrationFlag));
+        return !empty($request->asset->getParameterByID($this->migrationFlag)->value);
     }
 
     /**
@@ -236,7 +236,12 @@ class Handler extends Model
                         if (is_object($migrationData) && isset($migrationData->{$param->id})) {
                             if (!is_string($migrationData->{$param->id})) {
                                 if ($this->serialize) {
-                                    $migrationData->{$param->id} = json_encode($migrationData->{$param->id});
+
+                                    // Use JSON_UNESCAPED_SLASHES to save characters (1 slash per double quote)
+                                    $migrationData->{$param->id} = json_encode(
+                                        $migrationData->{$param->id},
+                                        JSON_UNESCAPED_SLASHES
+                                    );
                                 } else {
                                     $paramType = gettype($migrationData->{$param->id});
                                     throw new MigrationParameterFailException(
