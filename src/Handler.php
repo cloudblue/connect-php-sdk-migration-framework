@@ -164,7 +164,7 @@ class Handler extends Model
      */
     public function isMigration(Request $request)
     {
-        return !empty($request->asset->getParameterByID($this->migrationFlag));
+        return !empty($request->asset->getParameterByID($this->migrationFlag)->value);
     }
 
     /**
@@ -219,13 +219,11 @@ class Handler extends Model
                     if (array_key_exists($param->id, $this->transformations)) {
 
                         $this->logger->info("[MIGRATION::{$request->id}] Running transformation for parameter{$param->id}.");
-                        $new->asset->getParameterByID($param->id)->value(
-                            call_user_func_array($this->transformations[$param->id], [
-                                'data' => $migrationData,
-                                'logger' => $this->logger,
-                                'requestId' => $request->id,
-                            ])
-                        );
+                        $param->value(call_user_func_array($this->transformations[$param->id], [
+                            'data' => $migrationData,
+                            'logger' => $this->logger,
+                            'requestId' => $request->id,
+                        ]));
 
                     } else {
 
@@ -238,7 +236,12 @@ class Handler extends Model
                         if (is_object($migrationData) && isset($migrationData->{$param->id})) {
                             if (!is_string($migrationData->{$param->id})) {
                                 if ($this->serialize) {
-                                    $migrationData->{$param->id} = json_encode($migrationData->{$param->id});
+
+                                    // Use JSON_UNESCAPED_SLASHES to save characters (1 slash per double quote)
+                                    $migrationData->{$param->id} = json_encode(
+                                        $migrationData->{$param->id},
+                                        JSON_UNESCAPED_SLASHES
+                                    );
                                 } else {
                                     $paramType = gettype($migrationData->{$param->id});
                                     throw new MigrationParameterFailException(
@@ -247,10 +250,11 @@ class Handler extends Model
                                 }
                             }
 
-                            $new->asset->getParameterByID($param->id)->value($migrationData->{$param->id});
-                            $report['success'][] = $param->id;
+                            $param->value($migrationData->{$param->id});
                         }
                     }
+
+                    $report['success'][] = $param->id;
 
                 } catch (MigrationParameterFailException $e) {
 

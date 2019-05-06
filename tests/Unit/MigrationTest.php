@@ -88,6 +88,9 @@ class MigrationTest extends TestCase
         $request = new Request($this->getJSON(__DIR__ . '/request.migrate.valid.json'));
         $this->assertTrue($m->isMigration($request));
 
+        $request = new Request($this->getJSON(__DIR__ . '/request.migrate.empty.json'));
+        $this->assertFalse($m->isMigration($request));
+
         $request = new Request($this->getJSON(__DIR__ . '/request.valid.json'));
         $this->assertFalse($m->isMigration($request));
     }
