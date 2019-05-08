@@ -58,8 +58,8 @@ class MigrationServiceProvider extends ServiceProvider
         return new MigrationHandler([
             'logger' => $container['logger'],
             'transformations' => [
-                'email' => function ($migrationData, LoggerInterface $logger, $rid) {
-                    $logger->info("[MIGRATION::{$rid}] Processing teamAdminEmail parameter.");
+                'email' => function ($migrationData, LoggerInterface $logger, $request) {
+                    $logger->info("[MIGRATION::{$request->id}] Processing teamAdminEmail parameter.");
                     
                     if(empty($migrationData->teamAdminEmail)) {
                         throw new MigrationParameterFailException("Missing field teamAdminEmail.", 400);
@@ -71,8 +71,8 @@ class MigrationServiceProvider extends ServiceProvider
                     
                     return strtolower($migrationData->teamAdminEmail);
                 },
-                'team_id' => function ($migrationData, LoggerInterface $logger, $rid) {
-                    $logger->info("[MIGRATION::{$rid}] Processing teamId parameter.");
+                'team_id' => function ($migrationData, LoggerInterface $logger, $request) {
+                    $logger->info("[MIGRATION::{$request->id}] Processing teamId parameter.");
                     
                     if(empty($migrationData->teamId)) {
                         throw new MigrationParameterFailException("Missing field teamId.", 400);
@@ -80,8 +80,8 @@ class MigrationServiceProvider extends ServiceProvider
                     
                     return strtolower($migrationData->teamId);
                 },
-                'team_name' => function ($migrationData, LoggerInterface $logger, $rid) {
-                    $logger->info("[MIGRATION::{$rid}] Processing teamName parameter.");
+                'team_name' => function ($migrationData, LoggerInterface $logger, $request) {
+                    $logger->info("[MIGRATION::{$request->id}] Processing teamName parameter.");
                     
                     if(empty($migrationData->teamName)) {
                         throw new MigrationParameterFailException("Missing field teamName.", 400);
@@ -160,6 +160,7 @@ The connect migration middleware uses two different exceptions:
 | --------- | ------------------------------ | 
 | `MigrationParameterFailException` | Can be thrown if any parameter fails on validation and/or transformation, an error will be logged for that parameter, the migration will fail, the fulfillment will be skipped. | 
 | `MigrationAbortException` | The migration will directly fail, the fulfillment will be skipped. | 
+| `MigrationParameterPassException` | Parameter process will be omitted, other parameters will continue normally. | 
 
 
 

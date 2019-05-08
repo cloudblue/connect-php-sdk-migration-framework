@@ -4,6 +4,7 @@ namespace Test\Unit;
 
 use Closure;
 use Connect\Middleware\Migration\Exceptions\MigrationParameterFailException;
+use Connect\Middleware\Migration\Exceptions\MigrationParameterPassException;
 use Connect\Middleware\Migration\Handler;
 use Connect\Request;
 use Connect\Skip;
@@ -278,6 +279,34 @@ class MigrationTest extends TestCase
         $this->assertEquals(
             10 * 10,
             $migrated->asset->getParameterByID('num_licensed_users')->value
+        );
+    }
+
+    /**
+     * @depends testDefaultInstantiation
+     *
+     * @param Handler $m
+     * @throws Skip
+     */
+    public function testMigrateTransformationMapByPass(Handler $m)
+    {
+        $m->setTransformations([
+            'email' => function ($migrationData, LoggerInterface $logger, $rid) {
+                throw new MigrationParameterPassException('Not necessary');
+            },
+            'team_id' => function ($migrationData, LoggerInterface $logger, $rid) {
+                return strtoupper($migrationData->teamId);
+            },
+        ]);
+
+        $request = new Request($this->getJSON(__DIR__ . '/request.migrate.transformation.success.json'));
+        $migrated = $m->migrate($request);
+        $this->assertInstanceOf(Request::class, $migrated);
+        $this->assertNotEquals(spl_object_hash($request), spl_object_hash($migrated));
+
+        $this->assertEquals(
+            strtoupper('dbtid:AADaQq_w53nMDQbIPM_X123456PuzpcM2BI'),
+            $migrated->asset->getParameterByID('team_id')->value
         );
     }
 }

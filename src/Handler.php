@@ -5,6 +5,7 @@ namespace Connect\Middleware\Migration;
 use Closure;
 use Connect\Middleware\Migration\Exceptions\MigrationAbortException;
 use Connect\Middleware\Migration\Exceptions\MigrationParameterFailException;
+use Connect\Middleware\Migration\Exceptions\MigrationParameterPassException;
 use Connect\Model;
 use Connect\Param;
 use Connect\Request;
@@ -222,7 +223,7 @@ class Handler extends Model
                         $param->value(call_user_func_array($this->transformations[$param->id], [
                             'data' => $migrationData,
                             'logger' => $this->logger,
-                            'requestId' => $request->id,
+                            'request' => $request,
                         ]));
 
                     } else {
@@ -255,14 +256,20 @@ class Handler extends Model
                     }
 
                     $report['success'][] = $param->id;
+                    $report['processed'][] = $param->id;
+
+                } catch (MigrationParameterPassException $e) {
+
+                    $this->logger->error("[MIGRATION::{$request->id}] Bypassing parameter transformation: {$e->getMessage()}.");
+                    $report['processed'][] = $param->id;
+                    continue;
 
                 } catch (MigrationParameterFailException $e) {
 
                     $this->logger->error("[MIGRATION::{$request->id}] #{$e->getCode()}: {$e->getMessage()}.");
+                    $report['processed'][] = $param->id;
                     $report['failed'][] = $param->id;
                 }
-
-                $report['processed'][] = $param->id;
             }
 
             if (count($report['failed']) > 0) {
