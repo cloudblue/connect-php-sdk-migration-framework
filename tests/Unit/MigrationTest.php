@@ -3,6 +3,7 @@
 namespace Test\Unit;
 
 use Closure;
+use Connect\Config;
 use Connect\Middleware\Migration\Exceptions\MigrationParameterFailException;
 use Connect\Middleware\Migration\Exceptions\MigrationParameterPassException;
 use Connect\Middleware\Migration\Handler;
@@ -28,17 +29,30 @@ class MigrationTest extends TestCase
         $logger->shouldReceive('error');
         $logger->shouldReceive('debug');
 
+        $config = Mockery::mock(Config::class);
+
         $m = new Handler([
-            'logger' => $logger
+            'logger' => $logger,
+            'config' => $config,
+            'validation' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                // do some validation operation
+            },
+            'onSuccess' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                // do some success operation
+            }
         ]);
 
         $this->assertInstanceOf(Handler::class, $m);
         $this->assertInstanceOf(LoggerInterface::class, $m->getLogger());
+        $this->assertInstanceOf(Config::class, $m->getConfig());
         $this->assertInternalType('string', $m->getMigrationFlag());
         $this->assertEquals('migration_info', $m->getMigrationFlag());
         $this->assertInternalType('array', $m->getTransformations());
         $this->assertCount(0, $m->getTransformations());
         $this->assertNull($m->getTransformation('fake-param'));
+
+        $this->assertInstanceOf(Closure::class, $m->getValidation());
+        $this->assertInstanceOf(Closure::class, $m->getOnSuccess());
 
         return $m;
     }
@@ -57,15 +71,16 @@ class MigrationTest extends TestCase
             'logger' => $logger,
             'migrationFlag' => 'some_migration_param',
             'transformations' => [
-                'email' => function ($migrationData, LoggerInterface $logger, $rid) {
+                'email' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                     return strtolower($migrationData->teamAdminEmail);
                 }
             ]
         ]);
 
-        $m->setTransformation('name', function ($migrationData, LoggerInterface $logger, $rid) {
-            return ucfirst($migrationData->name);
-        });
+        $m->setTransformation('name',
+            function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                return ucfirst($migrationData->name);
+            });
 
         $this->assertInstanceOf(Handler::class, $m);
         $this->assertInstanceOf(LoggerInterface::class, $m->getLogger());
@@ -113,13 +128,36 @@ class MigrationTest extends TestCase
     /**
      * @depends testDefaultInstantiation
      * @expectedException \Connect\Skip
-     * @expectedExceptionMessage Migration failed.
+     * @expectedExceptionMessage Migration failed with Custom onFail function.
      *
-     * @param Handler $m
      * @throws \Connect\Skip
      */
-    public function testMigrateWithInvalidMigrationData(Handler $m)
+    public function testMigrateWithInvalidMigrationData()
     {
+
+        $logger = Mockery::mock(LoggerInterface::class);
+        $logger->shouldReceive('info');
+        $logger->shouldReceive('error');
+        $logger->shouldReceive('debug');
+
+        $config = Mockery::mock(Config::class);
+
+        $m = new Handler([
+            'logger' => $logger,
+            'config' => $config,
+            'validation' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                // do some validation operation
+            },
+            'onSuccess' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                // do some success operation
+            },
+            'onFail' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                throw new Skip('Migration failed with Custom onFail function.');
+            }
+        ]);
+
+        $this->assertInstanceOf(Closure::class, $m->getOnFail());
+
         $request = new Request($this->getJSON(__DIR__ . '/request.migrate.invalid.json'));
         $migrated = $m->migrate($request);
         $this->assertInstanceOf(Request::class, $migrated);
@@ -186,9 +224,10 @@ class MigrationTest extends TestCase
      */
     public function testMigrateTransformationMapManualFail(Handler $m)
     {
-        $m->setTransformation('team_id', function ($migrationData, LoggerInterface $logger, $rid) {
-            throw new MigrationParameterFailException('Manual fail');
-        });
+        $m->setTransformation('team_id',
+            function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                throw new MigrationParameterFailException('Manual fail');
+            });
 
         $this->assertInstanceOf(Closure::class, $m->getTransformation('team_id'));
 
@@ -242,16 +281,21 @@ class MigrationTest extends TestCase
     public function testMigrateTransformationMapSuccess(Handler $m)
     {
         $m->setTransformations([
-            'email' => function ($migrationData, LoggerInterface $logger, $rid) {
+            'email' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                 return strtoupper($migrationData->teamAdminEmail);
             },
-            'team_id' => function ($migrationData, LoggerInterface $logger, $rid) {
+            'team_id' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                 return strtoupper($migrationData->teamId);
             },
-            'team_name' => function ($migrationData, LoggerInterface $logger, $rid) {
+            'team_name' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                 return strtoupper($migrationData->teamName);
             },
-            'num_licensed_users' => function ($migrationData, LoggerInterface $logger, $rid) {
+            'num_licensed_users' => function (
+                $migrationData,
+                Request $request,
+                Config $config,
+                LoggerInterface $logger
+            ) {
                 return (int)$migrationData->licNumber * 10;
             }
         ]);
@@ -291,10 +335,10 @@ class MigrationTest extends TestCase
     public function testMigrateTransformationMapByPass(Handler $m)
     {
         $m->setTransformations([
-            'email' => function ($migrationData, LoggerInterface $logger, $rid) {
+            'email' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                 throw new MigrationParameterPassException('Not necessary');
             },
-            'team_id' => function ($migrationData, LoggerInterface $logger, $rid) {
+            'team_id' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                 return strtoupper($migrationData->teamId);
             },
         ]);

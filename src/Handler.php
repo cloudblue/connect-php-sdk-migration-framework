@@ -3,6 +3,7 @@
 namespace Connect\Middleware\Migration;
 
 use Closure;
+use Connect\Config;
 use Connect\Middleware\Migration\Exceptions\MigrationAbortException;
 use Connect\Middleware\Migration\Exceptions\MigrationParameterFailException;
 use Connect\Middleware\Migration\Exceptions\MigrationParameterPassException;
@@ -25,6 +26,12 @@ class Handler extends Model
     private $migrationFlag = 'migration_info';
 
     /**
+     * The Connector configuration
+     * @var Config
+     */
+    private $config;
+
+    /**
      * Logger instance.
      * @var LoggerInterface
      */
@@ -42,6 +49,24 @@ class Handler extends Model
      * @var callable[]
      */
     private $transformations = [];
+
+    /**
+     * Validation function
+     * @var callable
+     */
+    private $validation;
+
+    /**
+     * OnSuccess function
+     * @var callable
+     */
+    private $onSuccess;
+
+    /**
+     * OnFail function
+     * @var callable
+     */
+    private $onFail;
 
     /***************************************************
      *                Setters and Getters
@@ -66,6 +91,15 @@ class Handler extends Model
     }
 
     /**
+     * Set the configuration instance
+     * @param Config $config
+     */
+    public function setConfig(Config $config)
+    {
+        $this->config = $config;
+    }
+
+    /**
      * Return the migration flag.
      * @return string
      */
@@ -81,6 +115,15 @@ class Handler extends Model
     public function getLogger()
     {
         return $this->logger;
+    }
+
+    /**
+     * Return the configuration instance
+     * @return Config
+     */
+    public function getConfig()
+    {
+        return $this->config;
     }
 
     /**
@@ -154,6 +197,60 @@ class Handler extends Model
         return $this->serialize;
     }
 
+    /**
+     * Set the validation function
+     * @param callable $validation
+     */
+    public function setValidation(callable $validation)
+    {
+        $this->validation = $validation;
+    }
+
+    /**
+     * Return the validation function
+     * @return callable
+     */
+    public function getValidation()
+    {
+        return $this->validation;
+    }
+
+    /**
+     * Set the onSuccess function
+     * @param callable $onSuccess
+     */
+    public function setOnSuccess(callable $onSuccess)
+    {
+        $this->onSuccess = $onSuccess;
+    }
+
+    /**
+     * Get the onSuccess function
+     * @return callable
+     */
+    public function getOnSuccess()
+    {
+        return $this->onSuccess;
+    }
+
+    /**
+     * Set the onFail function
+     * @param callable $onFail
+     */
+    public function setOnFail(callable $onFail)
+    {
+        $this->onFail = $onFail;
+    }
+
+    /**
+     * Get the onFail function
+     * @return callable
+     */
+    public function getOnFail()
+    {
+        return $this->onFail;
+    }
+
     /***************************************************
      *              Migration Operations
      ***************************************************/
@@ -165,7 +262,8 @@ class Handler extends Model
      */
     public function isMigration(Request $request)
     {
-        return !empty($request->asset->getParameterByID($this->migrationFlag)->value);
+        $migration_param = $request->asset->getParameterByID($this->migrationFlag);
+        return !empty($migration_param->value);
     }
 
     /**
@@ -180,21 +278,21 @@ class Handler extends Model
             return $request;
         }
 
-        $new = clone $request;
-
-        $this->logger->info("[MIGRATION::{$request->id}] Running migration operations for request {$request->id}.");
-
-        $report = [
-            'failed' => [],
-            'success' => [],
-            'processed' => [],
-        ];
-
         try {
 
-            $rawMigrationData = $request->asset->getParameterByID($this->migrationFlag)->value;
+            $new = clone $request;
 
-            $this->logger->debug("[MIGRATION::{$request->id}] Migration data {$this->migrationFlag} {$rawMigrationData}.");
+            $this->logger->info("[MIGRATION::{$new->id}] Running migration operations for request {$new->id}.");
+
+            $report = [
+                'failed' => [],
+                'success' => [],
+                'processed' => [],
+            ];
+
+            $rawMigrationData = $new->asset->getParameterByID($this->migrationFlag)->value;
+
+            $this->logger->debug("[MIGRATION::{$new->id}] Migration data {$this->migrationFlag} {$rawMigrationData}.");
 
             $migrationData = json_decode($rawMigrationData);
 
@@ -205,7 +303,16 @@ class Handler extends Model
                 );
             }
 
-            $this->logger->debug("[MIGRATION::{$request->id}] Migration data {$this->migrationFlag} parsed correctly.");
+            if (isset($this->validation) && is_callable($this->validation)) {
+                call_user_func_array($this->validation, [
+                    'data' => $migrationData,
+                    'request' => $new,
+                    'config' => $this->config,
+                    'logger' => $this->logger,
+                ]);
+            }
+
+            $this->logger->debug("[MIGRATION::{$new->id}] Migration data {$this->migrationFlag} parsed correctly.");
 
             /** @var Param $param */
             foreach ($new->asset->params as $param) {
@@ -217,13 +324,14 @@ class Handler extends Model
                      * transformation array by parameter id. This operation will
                      * be executed to populate que requested parameter.
                      */
-                    if (array_key_exists($param->id, $this->transformations)) {
+                    if (isset($this->transformations[$param->id])) {
 
-                        $this->logger->info("[MIGRATION::{$request->id}] Running transformation for parameter{$param->id}.");
+                        $this->logger->info("[MIGRATION::{$new->id}] Running transformation for parameter{$param->id}.");
                         $param->value(call_user_func_array($this->transformations[$param->id], [
                             'data' => $migrationData,
+                            'request' => $new,
+                            'config' => $this->config,
                             'logger' => $this->logger,
-                            'request' => $request,
                         ]));
 
                     } else {
@@ -260,15 +368,16 @@ class Handler extends Model
 
                 } catch (MigrationParameterPassException $e) {
 
-                    $this->logger->error("[MIGRATION::{$request->id}] Bypassing parameter transformation: {$e->getMessage()}.");
+                    $this->logger->error("[MIGRATION::{$new->id}] Bypassing parameter transformation: {$e->getMessage()}.");
                     $report['processed'][] = $param->id;
                     continue;
 
                 } catch (MigrationParameterFailException $e) {
 
-                    $this->logger->error("[MIGRATION::{$request->id}] #{$e->getCode()}: {$e->getMessage()}.");
+                    $this->logger->error("[MIGRATION::{$new->id}] #{$e->getCode()}: {$e->getMessage()}.");
                     $report['processed'][] = $param->id;
                     $report['failed'][] = $param->id;
+
                 }
             }
 
@@ -284,14 +393,41 @@ class Handler extends Model
             $processed = count($report['processed']);
 
             $byName = implode(', ', $report['success']);
-            $this->logger->info("[MIGRATION::{$request->id}] Parameters {$success}/{$processed} ({$byName}) processed correctly.");
+            $this->logger->info("[MIGRATION::{$new->id}] Parameters {$success}/{$processed} ({$byName}) processed correctly.");
+
+            /**
+             * if the 'onSuccess' operation is defined run it. This operation should never return
+             * anything as the final result of the migration is the new request with the migrated
+             * parameters.
+             */
+            if (isset($this->onSuccess) && is_callable($this->onSuccess)) {
+                call_user_func_array($this->onSuccess, [
+                    'data' => $migrationData,
+                    'request' => $new,
+                    'config' => $this->config,
+                    'logger' => $this->logger,
+                ]);
+            }
 
         } catch (MigrationAbortException $e) {
 
-            $this->logger->error("[MIGRATION::{$request->id}] {$e->getCode()}: {$e->getMessage()}.");
-            throw new Skip("Migration failed.");
+            $this->logger->error("[MIGRATION::{$new->id}] {$e->getCode()}: {$e->getMessage()}.");
+
+            if (isset($this->onFail) && is_callable($this->onFail)) {
+                call_user_func_array($this->onFail, [
+                    'data' => $migrationData,
+                    'request' => $new,
+                    'config' => $this->config,
+                    'logger' => $this->logger,
+                    'exception' => $e
+                ]);
+            } else {
+                throw new Skip("Migration failed.");
+            }
         }
 
         return $new;
     }
+
+
 }

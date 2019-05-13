@@ -29,18 +29,33 @@ properly migrate the incoming old data.
 | logger          | `Psr\Log\LoggerInterface` | The logger instance of our connector. |
 | migrationFlag   | `string`                  | The name of the Connect parameter that stores the legacy data in json format. Default value is `migration_info`|
 | serialize       | `bool`                    | If true will automatically serialize any non-string value in the migration data on direct assignation flow. Default value is `false` |
+| validation      | `callable`                | Custom validation function. Not defined by default. |
+| onSuccess       | `callable`                | Custom function to execute on migration success. Not defined by default. |
+| onFail          | `callable`                | Custom function to execute on migration fail. Not defined by default. |
 | transformations | `array`                   | Assoc array with the connect param id as key and the rule to process the parameter value from the legacy data. Default value is an empty array. |
+
+Input parameters: 
+
+- `validation`: `$migrationData`, `Request $request`, `Config $config`, `LoggerInterface $logger`
+- `onSuccess`: `$migrationData`, `Request $request`, `Config $config`, `LoggerInterface $logger`
+- `onFail`: `$migrationData`, `Request $request`, `Config $config`, `LoggerInterface $logger`, `MigrationAbortException $e`
+- `transformations`: `$migrationData`, `Request $request`, `Config $config`, `LoggerInterface $logger`
 
 ```php
 <?php
 
 namespace App\Providers;
 
+use GuzzleHttp\Client;
+use Connect\Config;
+use Connect\Request;
+use Connect\Fail;
 use Connect\Middleware\Migration\Handler as MigrationHandler;
 use Connect\Runtime\ServiceProvider;
 use Pimple\Container;
 use Psr\Log\LoggerInterface;
 use Connect\Middleware\Migration\Exceptions\MigrationParameterFailException;
+use Connect\Middleware\Migration\Exceptions\MigrationAbortException;
 
 /**
  * Class MigrationServiceProvider
@@ -57,39 +72,97 @@ class MigrationServiceProvider extends ServiceProvider
     {
         return new MigrationHandler([
             'logger' => $container['logger'],
+            'config' => $container['config'],
             'transformations' => [
-                'email' => function ($migrationData, LoggerInterface $logger, $request) {
+                'email' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                     $logger->info("[MIGRATION::{$request->id}] Processing teamAdminEmail parameter.");
                     
-                    if(empty($migrationData->teamAdminEmail)) {
+                    $client = new Client();
+                    $response = $client->request('GET', strtr($config->service->migration->url, [
+                        '{instance}' => $migrationData->instance,
+                        '{subscription}' => $migrationData->subscription
+                    ]) . '/teamAdminEmail', [
+                        'headers' => [
+                            'http_errors' => false,
+                            'Authorization' => 'Basic ' . $migrationData->token
+                        ]
+                    ]);
+                    
+                    if ($response->getStatusCode() !== 200) {
+                        throw new MigrationParameterFailException("Missing field teamAdminEmail", $response->getStatusCode());
+                    }
+                    
+                    $data = json_decode($response->getBody()->getContents());
+                    
+                    if(empty($data->value)) {
                         throw new MigrationParameterFailException("Missing field teamAdminEmail.", 400);
                     }
                     
-                    if(!filter_var($migrationData->teamAdminEmail, FILTER_VALIDATE_EMAIL)) {
+                    if(!filter_var($data->value, FILTER_VALIDATE_EMAIL)) {
                         throw new MigrationParameterFailException("Wrong field teamAdminEmail must be an email.", 400);
                     }
                     
-                    return strtolower($migrationData->teamAdminEmail);
+                    return strtolower($data->value);
                 },
-                'team_id' => function ($migrationData, LoggerInterface $logger, $request) {
+                'team_id' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                     $logger->info("[MIGRATION::{$request->id}] Processing teamId parameter.");
                     
-                    if(empty($migrationData->teamId)) {
+                    $client = new Client();
+                    $response = $client->request('GET', strtr($config->service->migration->url, [
+                        '{instance}' => $migrationData->instance,
+                        '{subscription}' => $migrationData->subscription
+                    ]) . '/teamId', [
+                        'headers' => [
+                            'http_errors' => false,
+                            'Authorization' => 'Basic ' . $migrationData->token
+                        ]
+                    ]);
+                    
+                    if ($response->getStatusCode() !== 200) {
+                        throw new MigrationParameterFailException("Missing field teamId", $response->getStatusCode());
+                    }
+                    
+                    $data = json_decode($response->getBody()->getContents());
+                    
+                    if(empty($data->value)) {
                         throw new MigrationParameterFailException("Missing field teamId.", 400);
                     }
                     
-                    return strtolower($migrationData->teamId);
+                    return strtolower($data->value);
                 },
-                'team_name' => function ($migrationData, LoggerInterface $logger, $request) {
+                'team_name' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
                     $logger->info("[MIGRATION::{$request->id}] Processing teamName parameter.");
                     
-                    if(empty($migrationData->teamName)) {
+                    $client = new Client();
+                    $response = $client->request('GET', strtr($config->service->migration->url, [
+                        '{instance}' => $migrationData->instance,
+                        '{subscription}' => $migrationData->subscription
+                    ]) . '/teamName', [
+                        'headers' => [
+                            'http_errors' => false,
+                            'Authorization' => 'Basic ' . $migrationData->token
+                        ]
+                    ]);
+                    
+                    if ($response->getStatusCode() !== 200) {
+                        throw new MigrationParameterFailException("Missing field teamName", $response->getStatusCode());
+                    }
+                    
+                    $data = json_decode($response->getBody()->getContents());
+                    
+                    if(empty($data->value)) {
                         throw new MigrationParameterFailException("Missing field teamName.", 400);
                     }
                     
-                    return ucwords($migrationData->teamName);
+                    return ucwords($data->teamName);
                 },
-            ]
+            ],
+            'onSuccess' => function($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                $logger->info("Migration for request {$request->id} successful!");
+            },
+            'onFail' => function($migrationData, Request $request, Config $config, LoggerInterface $logger, MigrationAbortException $e) {
+                throw new Fail("Failing request {$request->id} due: " . $e->getMessage());
+            }
         ]);
     }
 }
@@ -101,16 +174,13 @@ Next we need to add this service provider to our configuration json:
 {
   "runtimeServices": {
     "migration": "\\App\\Providers\\MigrationServiceProvider",
-  }  
+  }
 }
-
 ```
 
-Finally we only need to call the migration service inside our `processRequest()` method of 
-the `FulfillmentAutomation` class:
+And in our `ProductFulfillment.php`:
 
 ```php
-
 <?php
 
 namespace App;
