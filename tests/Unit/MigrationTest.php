@@ -353,4 +353,46 @@ class MigrationTest extends TestCase
             $migrated->asset->getParameterByID('team_id')->value
         );
     }
+
+    /**
+     * @depends testDefaultInstantiation
+     *
+     * @param Handler $m
+     * @throws Skip
+     */
+    public function testMigrateTransformationMapSerializedDataSuccess(Handler $m)
+    {
+        $m->setMigrationDataFormat(Handler::MIGRATION_FORMAT_SOBJ);
+        $m->setTransformations([
+            'email' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                return strtoupper($migrationData->teamAdminEmail);
+            },
+            'team_id' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                return strtoupper($migrationData->teamId);
+            },
+            'team_name' => function ($migrationData, Request $request, Config $config, LoggerInterface $logger) {
+                return strtoupper($migrationData->teamName);
+            }
+        ]);
+
+        $request = new Request($this->getJSON(__DIR__ . '/request.migrate.transformation.sobj.success.json'));
+        $migrated = $m->migrate($request);
+        $this->assertInstanceOf(Request::class, $migrated);
+        $this->assertNotEquals(spl_object_hash($request), spl_object_hash($migrated));
+
+        $this->assertEquals(
+            strtoupper('example.migration@mailinator.com'),
+            $migrated->asset->getParameterByID('email')->value
+        );
+
+        $this->assertEquals(
+            strtoupper('dbtid:AADaQq_w53nMDQbIPM_X123456PuzpcM2BI'),
+            $migrated->asset->getParameterByID('team_id')->value
+        );
+
+        $this->assertEquals(
+            strtoupper('Migration Team'),
+            $migrated->asset->getParameterByID('team_name')->value
+        );
+    }
 }

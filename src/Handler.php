@@ -19,11 +19,23 @@ use Psr\Log\LoggerInterface;
  */
 class Handler extends Model
 {
+    const MIGRATION_FORMAT_JSON = 1;
+
+    const MIGRATION_FORMAT_SOBJ = 2;
+
     /**
      * Defines the migration param that triggers a migration.
      * @var string
      */
     private $migrationFlag = 'migration_info';
+
+    /**
+     * Defines how the data is unserialized
+     *  - MIGRATION_FORMAT_JSON => json_decode($data)
+     *  - MIGRATION_FORMAT_SOBJ => unseriealize($data)
+     * @var int
+     */
+    private $migrationDataFormat = self::MIGRATION_FORMAT_JSON;
 
     /**
      * The Connector configuration
@@ -82,6 +94,15 @@ class Handler extends Model
     }
 
     /**
+     * Set the migration data format.
+     * @param int $migrationDataFormat
+     */
+    public function setMigrationDataFormat($migrationDataFormat)
+    {
+        $this->migrationDataFormat = $migrationDataFormat;
+    }
+
+    /**
      * Set the logger instance.
      * @param LoggerInterface $logger
      */
@@ -106,6 +127,15 @@ class Handler extends Model
     public function getMigrationFlag()
     {
         return $this->migrationFlag;
+    }
+
+    /**
+     * Return the migration data format.
+     * @return string
+     */
+    public function getMigrationDataFormat()
+    {
+        return $this->migrationDataFormat;
     }
 
     /**
@@ -294,13 +324,21 @@ class Handler extends Model
 
             $this->logger->debug("[MIGRATION::{$new->id}] Migration data {$this->migrationFlag} {$rawMigrationData}.");
 
-            $migrationData = json_decode($rawMigrationData);
-
-            if (json_last_error() !== 0) {
-                $msg = json_last_error_msg();
-                throw new MigrationAbortException(
-                    "Unable to parse {$this->migrationFlag} parameter due: {$msg}."
-                );
+            switch ($this->migrationDataFormat) {
+                case self::MIGRATION_FORMAT_JSON:
+                    $migrationData = json_decode($rawMigrationData);
+                    if (json_last_error() !== 0) {
+                        $msg = json_last_error_msg();
+                        throw new MigrationAbortException(
+                            "Unable to parse {$this->migrationFlag} parameter due: {$msg}."
+                        );
+                    }
+                    break;
+                case self::MIGRATION_FORMAT_SOBJ:
+                    $migrationData = unserialize($rawMigrationData);
+                    break;
+                default:
+                    throw new MigrationAbortException('Unable to unserialize the migration data, bad migration format.');
             }
 
             if (isset($this->validation) && is_callable($this->validation)) {
